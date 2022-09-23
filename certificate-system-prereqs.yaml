@@ -1,0 +1,13 @@
+---
+- name: Certificate System Pre-reqs
+  hosts: <hosts>
+  remote_user: root
+
+  tasks:
+  - name: Install the redhat-ds module
+    shell: dnf -y module install redhat-ds
+
+  - name: Install the openldap-clients package
+    ansible.builtin.dnf:
+      name: openldap-clients
+      state: latest 

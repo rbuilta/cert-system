@@ -1,0 +1,20 @@
+[DEFAULT]
+pki_admin_password={{ pki_admin_password }}
+pki_client_pkcs12_password={{ pki_client_pkcs12_password }}
+pki_ds_password={{ pki_ds_password }}
+pki_ds_secure_connection=True
+pki_ds_secure_connection_ca_pem_file={{ pki_ds_ca_pem_file }}
+pki_client_database_password={{ pki_client_database_password }}
+pki_security_domain_password={{ pki_security_domain_password }}
+
+
+[CA]
+pki_random_serial_numbers_enable=true
+pki_admin_nickname=caadmin
+pki_admin_name=CA administrator account
+pki_admin_password={{ pki_admin_password }}
+pki_admin_uid=caadmin
+
+[TPS]
+pki_enable_server_side_keygen=True
+pki_authdb_basedn={{ pki_authdb_basedn }}

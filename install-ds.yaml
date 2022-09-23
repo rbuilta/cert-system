@@ -1,0 +1,208 @@
+---
+
+- name: Install DS
+  hosts: <hosts>
+  remote_user: root
+  vars_files: vars/vars-certsys-setup-inf.yaml
+  vars:
+    hash_pw_file: /tmp/temp_new-hash.txt
+    pw_file: /tmp/temp_pw.txt
+
+  tasks:
+  - name: Create the setup.inf file
+    ansible.builtin.template:
+      src: files/setup.inf.j2
+      dest: /tmp/setup.inf
+
+  - name: Run dscreate
+    shell: dscreate from-file /tmp/setup.inf
+    register: command_result
+    
+  - name: Stop DS 
+    shell: systemctl stop dirsrv@certsys2.service
+    register: command_result
+
+  - name: Create new nsslapd-rootpw
+    shell: /usr/bin/pwdhash {{ root_dn_pw }} > {{ hash_pw_file }}
+  
+  - name: cat new pw into var
+    command: cat {{ hash_pw_file }}
+    register: cat_output
+  - set_fact:
+      new_password: "{{ cat_output.stdout }}"
+
+  - name: Fix the dse.ldif file
+    replace:
+      path: "{{ server_root }}/slapd-{{ instance_name }}/dse.ldif"
+      regexp: '(^nsslapd-rootpw:\s)(.*)$\n[^\n]+'
+      replace: 'nsslapd-rootpw: {{ new_password }}'
+
+  - name: Remove the hash file
+    shell: rm -rf {{ hash_pw_file }}
+
+  - name: Create temp_pw.txt file
+    shell: echo "{{ root_dn_pw }}" > {{ pw_file }}
+    tags: test
+
+  - name: Start DS
+    shell: systemctl start dirsrv@certsys2.service
+    tags: test
+
+  - name: Create the ldapmodify.txt file
+    ansible.builtin.template:
+      src: files/ldapmodify.txt.j2
+      dest: /tmp/ldapmodify.txt
+
+  - name: Execute ldapmodify 
+    shell: ldapmodify -x -w {{ root_dn_pw }} -D "cn=Directory Manager" -h {{ full_machine_name }} -p 389 -f /tmp/ldapmodify.txt
+
+  - name: Restarting the DS service
+    shell: systemctl restart dirsrv@{{ instance_name }}
+    
+  - name: Creating the new Cert Directory to alias
+    command: "{{ item }} chdir={{ server_root }}/slapd-{{ instance_name }}"
+    with_items:
+    - mkdir -p alias
+    - chown dirsrv:dirsrv alias
+    - chmod 770 alias
+    - restorecon -Fvv alias
+    tags: test
+
+  - name: Create the file used by ldapmodify for enabling SSL with new certs
+    ansible.builtin.template:
+      src: files/ldapmodify_enable_ssl_new_certs.txt.j2
+      dest: /tmp/temp_ldapmodify_enable_ssl_new_certs.txt
+    tags: test
+
+  - name: Enable SSL with the new certs dir in DS
+    shell: ldapmodify -x -w {{ root_dn_pw }} -D "cn=Directory Manager" -h {{ full_machine_name }} -p 389 -f /tmp/temp_ldapmodify_enable_ssl_new_certs.txt
+    tags: test
+
+  - name: Initialize new NSS database
+    command: "{{ item }} chdir={{ server_root }}/slapd-{{ instance_name }}/alias"
+    with_items:
+    - certutil -N --empty-password -d .
+
+  - name: Change ownership of the alias dir
+    ansible.builtin.file:
+      path: "{{ server_root }}/slapd-{{ instance_name }}/alias"
+      state: directory
+      recurse: yes
+      owner: dirsrv
+      group: dirsrv
+
+  - name: Stop the DS service
+    command: systemctl stop dirsrv@{{ instance_name }}
+
+  - name: Move the required files into the alias directory
+    shell: "{{ item }}"
+    with_items:
+    - mv {{ server_root }}/slapd-{{ instance_name }}/*.crt {{ server_root }}/slapd-{{ instance_name }}/alias
+    - mv {{ server_root }}/slapd-{{ instance_name }}/*.csr {{ server_root }}/slapd-{{ instance_name }}/alias
+    - mv {{ server_root }}/slapd-{{ instance_name }}/*.db {{ server_root }}/slapd-{{ instance_name }}/alias
+    - mv {{ server_root }}/slapd-{{ instance_name }}/*.txt {{ server_root }}/slapd-{{ instance_name }}/alias
+    - mv {{ server_root }}/slapd-{{ instance_name }}/*.0 {{ server_root }}/slapd-{{ instance_name }}/alias
+
+  - name: Start the DS service
+    command: systemctl start dirsrv@{{ instance_name }}
+
+  - name: Create a separate NSSDB in /root/temp-ca
+    command: "{{ item }}"
+    with_items:
+    - mkdir -p /root/temp-ca
+    - certutil -N --empty-password -d /root/temp-ca
+
+  - name: Create noise file for random certutil usage
+    command: dd if=/dev/urandom of=/tmp/noise count=1
+
+  - name: Create self-signed cert
+    ansible.builtin.expect:
+      command: certutil -S -d /root/temp-ca/ -z /tmp/noise -1 -2 -x -t "CT,," -m 1000 -v 144 -k rsa -g 4096 -n "Temp-CA Cert" -s "cn=Temp CA Cert" -Z SHA256 --nsCertType "sslCA"
+      responses:
+        '\>': '0'
+        '\>': '1'
+        '\>': '2'
+        '\>': '3'
+        '\>': '5'
+        '\>': '9'
+        'Is this a critical extension \[y/N\]?': 'y'
+        'Is this a CA certificate \[y/N\]?': 'y'
+        'Enter the path length constraint, enter to skip \[<0 for unlimited path\]: >': '0'
+        'Is this a critical extension \[y/N\]?': 'y'
+      echo: yes
+
+  - name: Verify the newly created self-signed certificate is valid
+    command: certutil -L -d /root/temp-ca/ -n "Temp-CA Cert" |grep Issuer
+    register: certutil_verify
+    failed_when: '"Temp CA Cert" not in certutil_verify.stdout'
+
+  - name: Create a new /tmp/noise file
+    command: dd if=/dev/urandom of=/tmp/noise count=1
+
+  - name: Create the LDAP SSL server cert dir
+    command: "{{ item }}"
+    with_items:
+    - mkdir -p /root/certs
+
+  - name: Create the LDAP SSL server cert 
+    command: chdir=/etc/pki/nssdb certutil -R -d . -f {{ pw_file }} -s "cn=cert-system2.gusszz.lab" -8 "cert-system2.gusszz.lab","cert-system2" -z /tmp/noise -k rsa -g 4096 -o /root/certs/"{{ short_machine_name }}".csr -a
+    tags: test
+
+  - name: Review the certificate reqeust
+    command: openssl req -in /root/certs/{{ short_machine_name }}.csr -noout -text
+    register: cert_review_result
+    tags: test2
+
+  - name: Sign the cert reqeust off the Temp CA
+    command: certutil -C -d /root/temp-ca/ -c "Temp-CA Cert" -i /root/certs/{{ short_machine_name }}.csr -m 1001 -v 72 -o /root/certs/{{ short_machine_name }}.cer -a
+    tags: test2
+
+  - name: Review the issued cert
+    command: openssl x509 -in /root/certs/{{ short_machine_name }}.cer -noout -text
+    tags: test2
+
+  - name: Export the Temp CA cert
+    shell: certutil -L -d /root/temp-ca/ -n "Temp-CA Cert" -a > /root/certs/temp-ca.cer
+    tags: test2
+
+  - name: Import the Temp CA cert and issued SSL Cert
+    command: "{{ item }}"
+    with_items:
+    - cd {{ server_root }}/slapd-{{ instance_name }}/alias
+    - certutil -A -d . -n "Temp-CA Cert" -i /root/certs/temp-ca.cer -t "CT,C,C" -a
+    - cd {{ server_root }}/slapd-{{ instance_name }}/alias
+    tags: test2
+
+  - name: Add the ca.crt to the local trust store
+    command: chdir={{ server_root }}/slapd-{{ instance_name }}/alias cp ca.crt /etc/pki/ca-trust/source/anchors
+    tags: test2
+
+  - name: Check the DS system status and verify it is running
+    command: systemctl status dirsrv@certsys2.service
+    register: agent_status
+    failed_when: "'inactive' in agent_status.stdout"
+    changed_when: False
+    tags: test2
+
+  - name: Update CA Trust
+    shell: update-ca-trust
+    register: result
+    failed_when: result.rc == 1
+    tags: test2
+
+  - name: Query the certificate using openssl command
+    command: echo "Q" | openssl s_client -connect '{{ full_machine_name }}:636' -showcerts |grep Verification
+    register: cert_query_result
+    failed_when: "'error' in cert_query_result.stdout"
+    changed_when: False
+    tags: test2
+
+  - name: LDAP search against TLS enabled URI
+    command: ldapsearch -x -w {{ root_dn_pw }} -D "cn=Directory Manager" -b "cn=config" -H ldaps://{{ full_machine_name }}:636 cn=RSA |grep Success
+    register: ldapsearch_result
+    failed_when:
+      - '"(-1)" in ldapsearch_result.stdout'
+    tags: test2
+
+  - name: Clean up temp files
+    shell: rm -rf /tmp/temp_*

@@ -1,0 +1,10 @@
+---
+- name: Update and install required packages
+  hosts: <hosts>
+  remote_user: root
+
+  tasks:
+  - name: Upgrade all packages
+    ansible.builtin.dnf:
+      name: "*"
+      state: latest

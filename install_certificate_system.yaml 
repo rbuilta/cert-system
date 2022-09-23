@@ -1,0 +1,24 @@
+---
+- name: Subscription Manager
+  import_playbook: subscription-manager.yaml
+  tags: subs
+
+- name: Update System
+  import_playbook: update-install-packages.yaml
+  tags: update
+
+- name: Security Checks
+  import_playbook: security-checks.yaml
+  tags: security
+
+- name: Certificate System Prereqs
+  import_playbook: certificate-system-prereqs.yaml
+  tags: prereqs
+
+- name: Install DS
+  import_playbook: install-ds.yaml
+  tags: installds
+
+- name: Install CS
+  import_playbook: install-cs.yaml
+  tags: installcs

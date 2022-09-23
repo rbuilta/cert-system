@@ -1,0 +1,76 @@
+---
+
+- name: Install CS
+  hosts: <hosts>
+  remote_user: root
+  vars_files: 
+    - vars/vars-certsys-setup-inf.yaml
+    - vars/vars-config.txt.yaml
+
+  tasks:
+  - name: Enable the redhat-pki module
+    command: dnf -y module enable redhat-pki
+
+  - name: Install the redhat-pki package
+    command: dnf -y install redhat-pki
+
+  - name: Create the config.txt file in /tmp
+    ansible.builtin.template:
+      src: files/config.txt.j2
+      dest: /tmp/config.txt
+
+  - name: Use pkispawn to install CA subsystem
+    command: pkispawn -f /tmp/config.txt -s CA
+
+  - name: Sleep for 10 seconds
+    ansible.builtin.wait_for:
+      timeout: 10
+
+  - name: Use pkispawn to install KRA subsystem
+    command: pkispawn -f /tmp/config.txt -s KRA
+
+  - name: Sleep for 10 seconds
+    ansible.builtin.wait_for:
+      timeout: 10
+
+  - name: Use pkispawn to install OCSP subsystem
+    command: pkispawn -f /tmp/config.txt -s OCSP
+
+  - name: Sleep for 10 seconds
+    ansible.builtin.wait_for:
+      timeout: 10
+
+  - name: Use pkispawn to install TKS subsystem
+    command: pkispawn -f /tmp/config.txt -s TKS
+    tags: test
+
+  - name: Sleep for 10 seconds
+    ansible.builtin.wait_for:
+      timeout: 10
+
+  - name: Use pkispawn to install TPS subsystem
+    command: pkispawn -f /tmp/config.txt -s TPS
+    tags: test
+
+  - name: Sleep for 10 seconds
+    ansible.builtin.wait_for:
+      timeout: 10
+
+  - name: Add the KRA Nickname to the CS.cfg file
+    lineinfile:
+      dest: /etc/pki/pki-tomcat/ca/CS.cfg
+      insertafter: 'ca.connector.KRA.uri'
+      line: "ca.connector.KRA.transportCertNickname=transportCert cert-pki-tomcat KRA"
+    tags: test
+
+  - name: Export the KRA transport cert
+    command: pki-server cert-export kra_transport --cert-file /root/certs/kra_transport.crt
+    tags: test
+
+  - name: Import the KRA cert into the NSS DB
+    command: pki client-cert-import kra_transport --cert /root/certs/kra_transport.crt
+    tags: test
+
+  - name: Restart the DS Service
+    command: systemctl restart dirsrv@{{ instance_name }}
+    tags: test

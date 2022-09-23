@@ -1,0 +1,9 @@
+pki_admin_password: '<change_me>'
+pki_client_pkcs12_password: '<change_me>'
+pki_ds_password: '<change_me>'
+pki_ds_ca_pem_file: /etc/dirsrv/slapd-certsys2/alias/ca.crt
+pki_security_domain_password: '<change_me>'
+
+#[TPS]
+pki_client_database_password: '<change_me>'
+pki_authdb_basedn: 'dc=example,dc=com'

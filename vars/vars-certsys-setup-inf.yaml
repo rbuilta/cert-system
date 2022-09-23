@@ -1,0 +1,17 @@
+---
+
+full_machine_name: <your_machine_name_fqdn>
+short_machine_name: <your_machine_name_short>
+config_directory_admin_id: admin
+config_directory_admin_pw: '<change_me>'
+suite_spot_userid: dirsrv
+suite_spot_group: dirsrv
+server_root: /etc/dirsrv
+
+instance_name: <instance_name>
+server_port: 389
+suffix: 'dc=example,dc=com'
+root_dn: 'cn=Directory Manager'
+root_dn_pw: '<change_me>'
+
+pki_authdb_basedn: 'dc=example,dc=com'

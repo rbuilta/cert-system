@@ -1,0 +1,9 @@
+dn: cn=config
+changetype: modify
+replace: nsslapd-security
+nsslapd-security: on
+
+dn: cn=config
+changetype: modify
+replace: nsslapd-certdir
+nsslapd-certdir: {{ server_root }}/slapd-{{ instance_name }}/alias

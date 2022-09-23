@@ -1,0 +1,36 @@
+---
+- name: Security Checks and Verification
+  hosts: <hosts>
+  remote_user: root
+
+  tasks:
+  - name: Verify FIPS is enabled
+    shell: fips-mode-setup --enable
+
+  - name: Reboot server for FIPS mode
+    reboot:
+      reboot_timeout: 300
+
+  - name: Ensure FIPS mode is enabled
+    become: true
+    shell: fips-mode-setup --check
+    register: _result
+
+  - assert:
+      that: _result.stdout == "FIPS mode is enabled."
+
+  - name: Firewall changes http and https
+    shell: firewall-cmd --permanent --add-service="http" --add-service="https"
+    tags: firewall
+
+  - name: Firewall changes ldap and ldaps
+    shell: firewall-cmd --add-service=ldap --add-service=ldaps --permanent
+    tags: firewall
+
+  - name: Firewall changes for 8000 ports
+    shell: firewall-cmd --permanent --add-port={8080/tcp,8443/tcp,8009/tcp,8005/tcp}
+    tags: firewall
+
+  - name: Firewall reload
+    shell: firewall-cmd --reload
+    tags: firewall

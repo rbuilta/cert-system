@@ -1,0 +1,19 @@
+dn: cn=config
+changetype: modify
+replace: nsslapd-port
+nsslapd-port: 389
+
+dn: cn=config
+changetype: modify
+replace: nsslapd-secureport
+nsslapd-secureport: 636
+
+dn: cn=config
+changetype: modify
+replace: nsslapd-listenhost
+nsslapd-listenhost: {{ full_machine_name }}
+
+dn: cn=config
+changetype: modify
+replace: nsslapd-securelistenhost
+nsslapd-securelistenhost: {{ full_machine_name }}

@@ -1,0 +1,33 @@
+---
+- name: Subscription manager stuff
+  hosts: <hosts>
+  remote_user: root
+
+  tasks:
+  - name: Subscription manager plus pool id
+    redhat_subscription:
+      state: present
+      username: <rhn_user_name>
+      password: <rhn_user_password>
+      pool_ids: <pool_id>
+
+  - name: Disable all RHSM repositories
+    community.general.rhsm_repository:
+      name: '*'
+      state: disabled
+
+  - name: Enable Certificate System Repo
+    community.general.rhsm_repository:
+      name: certsys-10.4-for-rhel-8-x86_64-rpms
+
+  - name: Enable Directory Server Repo
+    community.general.rhsm_repository:
+      name: dirsrv-11-for-rhel-8-x86_64-rpms
+
+  - name: Enable RHEL 8 AppStream
+    community.general.rhsm_repository:
+      name: rhel-8-for-x86_64-appstream-rpms
+
+  - name: Enable RHEL 8 BaseOS
+    community.general.rhsm_repository:
+      name: rhel-8-for-x86_64-baseos-rpms
